@@ -210,25 +210,6 @@
   .term-tab .ps{display:inline-flex;align-items:center;justify-content:center;width:20px;height:18px;background:#3b78ff;color:#fff;font-weight:700;font-size:11px;border-radius:3px}
   .term-title .x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:18px;line-height:1}
   .term-title .x:hover{color:var(--text)}
-  /* Services panel (sidebar) */
-  .svc{display:flex;flex-direction:column;gap:8px}
-  .svc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
-  .svc-list{display:flex;flex-wrap:wrap;gap:6px}
-  .svc-chip{flex:1 1 calc(50% - 6px);min-width:118px;display:flex;flex-direction:column;gap:4px;text-decoration:none;
-    border:1px solid var(--border);border-radius:11px;padding:8px 10px;background:var(--card);transition:.15s}
-  .svc-chip:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
-  .svc-top{display:flex;align-items:center;gap:6px}
-  .svc-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:var(--red);transition:.2s}
-  .svc-dot.up{background:var(--green);box-shadow:0 0 7px var(--green)}
-  .svc-label{flex:1;font-size:11.5px;font-weight:700;color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .svc-link{font-size:10px;color:var(--muted);word-break:break-all;line-height:1.25}
-  .svc-chip:hover .svc-link{color:var(--accent);text-decoration:underline}
-  .svc-boot{cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:8px;
-    padding:3px 11px;font-size:11px;font-weight:700;transition:.15s;white-space:nowrap;flex:0 0 auto}
-  .svc-boot:hover{border-color:var(--accent);color:var(--accent)}
-  .svc-boot:disabled{opacity:.6;cursor:default}
-  .svc-boot.on{border-color:var(--accent);color:var(--accent);background:transparent}
-  .svc-boot.on:hover{background:rgba(45,212,191,.14);color:var(--accent)}
   /* Terminal tabs (multiple sessions) */
   .term-tabs{display:flex;align-items:stretch;gap:2px;flex:1;overflow-x:auto}
   .term-tabs::-webkit-scrollbar{height:6px}.term-tabs::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:6px}
@@ -271,11 +252,6 @@
     <div class="sec" style="margin-top:6px">Chats</div>
     <button class="newchat" id="newChat">+ New chat</button>
     <div id="chats"></div>
-    <div class="svc-head">
-      <div class="sec">Services</div>
-      <button class="svc-boot" id="allToggle">⏻ Boot</button>
-    </div>
-    <div class="svc" id="services"></div>
   </aside>
 
   <main id="main">
@@ -841,41 +817,7 @@ const TermManager = (function () {
 })();
 
 
-async function loadServices(){
-  let st={};
-  try{ st=await (await fetch(TERM+"/service/status")).json(); }catch(e){ st={}; }
-  const web=!!st.webui, term=!!st.api, wsUp=!!st.ws, ollama=!!st.ollama;
-  const upCount=(web?1:0)+(term?1:0)+(wsUp?1:0)+(ollama?1:0);
-  const allUp = upCount>=3;
-  const chip=(up,label,url,href)=>`<a class="svc-chip" href="${href}" target="_blank" rel="noopener">
-      <div class="svc-top"><span class="svc-dot ${up?"up":""}"></span><span class="svc-label">${label}</span></div>
-      <span class="svc-link">${url}</span>
-    </a>`;
-  const el=$("services"); if(!el)return;
-  el.innerHTML=`<div class="svc-card">
-      <div class="svc-list">
-        ${chip(web,"Web UI","localhost:8000","http://localhost:8000/")}
-        ${chip(term,"Terminal API","localhost:8001",TERM+"/")}
-        ${chip(wsUp,"Terminal WS","localhost:8002",WS+"/")}
-        ${chip(ollama,"Ollama","localhost:11434",API+"/")}
-      </div>
-    </div>`;
-  const ab=$("allToggle"); if(ab){
-    ab.className="svc-boot"+(allUp?" on":"");
-    ab.textContent=allUp?"■ Shutdown":"⏻ Boot";
-    ab.onclick=async()=>{
-      ab.disabled=true; ab.textContent="…working…";
-      let now={};
-      try{ now=await (await fetch(TERM+"/service/status")).json(); }catch(e){ now={}; }
-      const nowCount=(!!now.webui?1:0)+(!!now.api?1:0)+(!!now.ws?1:0)+(!!now.ollama?1:0);
-      const allUpNow=nowCount>=3;
-      await fetch(TERM+"/service/all",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:allUpNow?"stop":"start"})});
-      setTimeout(loadServices,2500);
-    };
-  }
-}
-
-loadChats();loadModels();loadRunning();loadServices();setInterval(loadModels,20000);setInterval(loadRunning,10000);setInterval(loadServices,5000);
+loadChats();loadModels();loadRunning();setInterval(loadModels,20000);setInterval(loadRunning,10000);
 
 // Warn if the page was opened as a local file instead of through the http server.
 (function(){
