@@ -10,12 +10,13 @@ Ollama's `OLLAMA_MODELS` points to this folder, so **all model weights live here
 
 ```
 f:\tmp\Model\
-  start-ollama.bat   # launcher: sets OLLAMA_MODELS + OLLAMA_ORIGINS then starts 4 processes
+  start-ollama.bat   # launcher: starts all 4 processes in ONE window (+ opens Chrome)
+  stop-ollama.bat    # stops everything (kills ports 11434 / 8000 / 8001 / 8002)
   README.md          # this file
-  chats.json         # saved chat history (empty by default)
+  chats.json         # saved chat history (auto-saved by the Web UI)
   webui\
     index.html       # the single-file web UI (chat + terminal)
-    terminal.py      # Terminal API (port 8001) + service/ollama control
+    terminal.py      # Terminal API (port 8001) + Ollama model control
     wsserver.py      # WebSocket relay (port 8002)
   blobs/             # model weights (Ollama content-addressed store) — DO NOT COMMIT
   manifests/         # model manifests — DO NOT COMMIT
@@ -28,10 +29,12 @@ f:\tmp\Model\
 
 ## 2. Quick start (one click)
 
-1. Double-click **`start-ollama.bat`**. It starts **4 processes** (see below) and opens
-   the UI in a Chrome app window at `http://localhost:8000`.
+1. Double-click **`start-ollama.bat`**. It starts **4 processes** (see below) in a single
+   terminal window and opens the UI in a Chrome app window at `http://localhost:8000`.
 2. Wait ~3 seconds for Ollama to come up.
 3. In the Web UI: pick a model in the left sidebar → click **▶ Run** → start chatting.
+4. To stop everything, either close that terminal window (type `stop` then Enter) or run
+   **`stop-ollama.bat`**.
 
 > **Do NOT open `webui/index.html` by double-clicking it.** That loads the page as a
 > `file://` URL with no backend running, so the **▶ Run** model button, terminal, and the
@@ -49,18 +52,25 @@ f:\tmp\Model\
 |---|---------|---------|------|---------|
 | 1 | **Ollama server** | `ollama serve` (`OLLAMA_MODELS=F:\tmp\Model`, `OLLAMA_ORIGINS=*`) | `11434` | Serves the LLM + model management API |
 | 2 | **Web UI** | `python -m http.server 8000` (in `webui/`) | `8000` | Serves `index.html` |
-| 3 | **Terminal API** | `python terminal.py` (in `webui/`) | `8001` | Runs shell commands, lists/starts/stops services & models, file writes |
+| 3 | **Terminal API** | `python terminal.py` (in `webui/`) | `8001` | Runs shell commands, lists/controls Ollama models, saves chats, writes files |
 | 4 | **WebSocket relay** | `python wsserver.py` (in `webui/`) | `8002` | Streams terminal output to the browser (`/ws`) |
 
 It also opens `chrome --app=http://localhost:8000` as a standalone window.
+All four processes run inside that one `start-ollama.bat` window — there is no separate
+"Boot / Shutdown" button in the UI; to stop, close the window (type `stop`) or run `stop-ollama.bat`.
 
 ### Terminal API (`terminal.py`, port 8001) endpoints
 - `POST /exec` — run a shell command, returns stdout/stderr.
-- `GET  /chats` — list saved chats.
+- `GET  /chats` — list saved chats. `POST /chats` — save chats to `chats.json`.
 - `GET  /ps` — running Ollama models.
-- `GET  /ollama/status` · `POST /ollama/start` · `POST /ollama/stop` — control the server.
-- `GET  /service/status` · `POST /service/all` — control webui/ws/ollama services.
+- `GET  /ollama/status` · `POST /ollama/start` · `POST /ollama/stop` — control the Ollama server.
 - `POST /writefile` — write a file to disk.
+
+### Chat history (persistence)
+Every message, rename, and new-chat action is saved automatically:
+the Web UI `POST`s the full chat list to `terminal.py` `/chats`, which writes
+`f:\tmp\Model\chats.json`. A `localStorage` copy is kept as a fallback. Chats survive
+restarts — just launch `start-ollama.bat` again and your history reloads.
 
 ### WebSocket (`wsserver.py`, port 8002)
 - Only serves `/ws` — pushes live terminal output to the open browser tab.
@@ -149,15 +159,17 @@ Any OpenAI-compatible/Ollama client can use base URL `http://localhost:11434`.
 ## 6. Folder layout (detail)
 ```
 f:\tmp\Model\
-  start-ollama.bat   # launcher: sets OLLAMA_MODELS + starts 4 processes
+  start-ollama.bat   # launcher: starts all 4 services in one window (+ opens Chrome)
+  stop-ollama.bat    # stops all 4 services (kills their ports)
   README.md          # this file
-  chats.json         # chat history
+  chats.json         # saved chat history (auto-saved, git-ignored)
   webui/             # front-end + back-end
-    index.html       # single-file UI (chat + terminal)
+    index.html       # single-file UI (chat + terminal + code boxes)
     terminal.py      # Terminal API (port 8001)
     wsserver.py      # WebSocket relay (port 8002)
   blobs/             # model weights (git-ignored)
   manifests/         # model manifests (git-ignored)
+  logs/              # per-service logs from start-ollama.bat (git-ignored)
 ```
 > `blobs/` is Ollama's shared weight store. This README is the human-readable
 > organization layer — edit it to track models, versions, and notes.
@@ -172,6 +184,10 @@ f:\tmp\Model\
 RTX 3070 Laptop (8 GB VRAM) · 31.4 GB RAM · ~430 GB free SSD.
 Both models run fully in VRAM with context headroom.
 
-## 9. Stopping everything
-Close the 4 `cmd` windows opened by `start-ollama.bat`, or from the Web UI
-use the terminal panel / service controls. To free VRAM: `ollama stop <model>`.
+## 10. Stopping everything
+- Type **`stop`** in the `start-ollama.bat` window, **or**
+- Double-click **`stop-ollama.bat`** (kills the Ollama + Web UI + Terminal API + WebSocket
+  ports), **or** just close the launcher window.
+
+To free VRAM without stopping the stack: `ollama stop <model>` (or the **■ Stop** button
+next to each model in the sidebar).

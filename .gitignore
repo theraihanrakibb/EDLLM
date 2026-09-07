@@ -9,6 +9,16 @@ __pycache__/
 # Runtime files written by the UI (Save/Run buttons)
 webui/saved/
 
+# Chat history (private, auto-saved by the web UI) and service logs
+chats.json
+logs/
+
+# Chat history (private, auto-saved by the app)
+chats.json
+
+# Per-service logs from start-ollama.bat
+logs/
+
 # OS / editor junk
 Thumbs.db
 .DS_Store

@@ -51,84 +51,6 @@ def ollama_stop():
     ollama_proc = None
     return True
 
-# --- manage the other local services (spawned by the backend) ---
-procs = {}  # name -> Popen
-
-def _spawn(name, args):
-    global procs
-    env = dict(os.environ)
-    env["OLLAMA_MODELS"] = WORKDIR
-    procs[name] = subprocess.Popen(
-        args, cwd=os.path.join(WORKDIR, "webui"), env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        creationflags=0x00000200,
-    )
-
-def service_up(name):
-    urls = {"webui": "http://127.0.0.1:8000/", "api": "http://127.0.0.1:8001/ps", "ws": "http://127.0.0.1:8002/"}
-    if name == "ollama":
-        return ollama_is_up()
-    try:
-        with urllib.request.urlopen(urls[name], timeout=2) as r:
-            return r.status < 500
-    except urllib.error.HTTPError as e:
-        # server responded with an error status (e.g. 404 from tornado's
-        # WebSocket-only route) -> it IS listening, so treat as up.
-        return e.code < 500
-    except Exception:
-        return False
-
-def service_start(name):
-    if name == "ollama":
-        return ollama_start()
-    # clear any stale process holding the port so the new instance can bind
-    port = 8000 if name == "webui" else 8002
-    kill_port(port)
-    args = ["python", "-m", "http.server", "8000"] if name == "webui" else ["python", "wsserver.py"]
-    _spawn(name, args)
-    return True
-
-def kill_port(port):
-    try:
-        out = subprocess.check_output(["netstat", "-ano"], stderr=subprocess.DEVNULL,
-                                     creationflags=0x8000000).decode("utf-8", "replace")
-        for line in out.splitlines():
-            if (":%d" % port) in line and "LISTENING" in line:
-                pid = line.split()[-1].strip()
-                subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True,
-                               creationflags=0x8000000)
-                return True
-    except Exception:
-        pass
-    return False
-
-def service_stop(name):
-    if name == "ollama":
-        ollama_stop()
-        kill_port(11434)
-        return True
-    port = 8000 if name == "webui" else 8002
-    p = procs.get(name)
-    if p and p.poll() is None:
-        try:
-            p.terminate(); p.wait(timeout=3)
-        except Exception:
-            try: p.kill()
-            except Exception: pass
-    procs[name] = None
-    kill_port(port)  # ensure the port is fully released even if the proc is detached
-    return True
-
-def service_all(action):
-    for name in ("webui", "ws", "ollama"):
-        if action == "start":
-            if not service_up(name):
-                service_start(name)
-        else:
-            service_stop(name)
-    time.sleep(2)
-    return {"webui": service_up("webui"), "api": True, "ws": service_up("ws"), "ollama": service_up("ollama")}
-
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def _cors(self):
@@ -222,15 +144,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(json.dumps({"running": up, "port": 11434}).encode("utf-8"))
-        elif self.path.startswith("/service/status"):
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self._cors()
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                "webui": service_up("webui"), "api": True,
-                "ws": service_up("ws"), "ollama": service_up("ollama"),
-            }).encode("utf-8"))
         else:
             self.send_response(404)
             self.end_headers()
@@ -266,20 +179,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(json.dumps({"ok": True, "running": ollama_is_up()}).encode("utf-8"))
-        elif self.path.startswith("/service/all"):
-            try:
-                length = int(self.headers.get("Content-Length", 0))
-                obj = json.loads(self.rfile.read(length) if length else b"{}")
-                action = obj.get("action", "start")
-                status = service_all(action)
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self._cors()
-                self.end_headers()
-                self.wfile.write(json.dumps(status).encode("utf-8"))
-            except Exception as ex:
-                self.send_response(500); self.end_headers()
-                self.wfile.write(("error: " + str(ex)).encode("utf-8"))
         elif self.path.startswith("/writefile"):
             try:
                 length = int(self.headers.get("Content-Length", 0))
