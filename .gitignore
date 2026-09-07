@@ -6,6 +6,9 @@ manifests/
 __pycache__/
 *.pyc
 
+# Runtime files written by the UI (Save/Run buttons)
+webui/saved/
+
 # OS / editor junk
 Thumbs.db
 .DS_Store

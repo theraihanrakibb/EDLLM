@@ -142,6 +142,35 @@
   .msg .body pre.codebox code{white-space:pre;font:inherit;color:inherit}
   .msg .body code.inline{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;background:var(--term-bg);
     border:1px solid var(--border);border-radius:5px;padding:1px 5px;color:var(--term-fg)}
+  .msg .body .codewrap{margin:8px 0}
+  .msg .body .codetools{display:flex;gap:8px;margin-bottom:6px}
+  .cbtn{cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);
+    border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;transition:.15s}
+  .cbtn:hover{background:var(--card);color:var(--text)}
+  .cbtn.save{border-color:var(--accent);color:var(--accent)}
+  .cbtn.run{border-color:var(--green);color:var(--green)}
+  .cbtn:disabled{opacity:.45;cursor:default}
+  .codeout{margin-top:6px;padding:8px 10px;background:var(--term-bg);border:1px solid var(--border);
+    border-radius:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:pre-wrap;
+    color:var(--term-fg);max-height:240px;overflow:auto}
+  .msg .body .codewrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--term-bg)}
+  .msg .body .codehead{display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:6px 10px;background:var(--term-title);border-bottom:1px solid var(--border)}
+  .msg .body .codelang{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+  .msg .body .codeacts{display:flex;gap:6px}
+  .msg .body .codetools{margin-bottom:6px}
+  .cbtn.copy{border-color:var(--border);color:var(--muted)}
+  #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);opacity:0;
+    background:var(--card);border:1px solid var(--accent);color:var(--text);padding:10px 16px;border-radius:10px;
+    font-size:13px;z-index:200;transition:.25s;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #warn{position:fixed;top:0;left:0;right:0;z-index:300;background:rgba(224,145,106,.16);
+    border-bottom:1px solid var(--accent2);color:var(--text);padding:10px 16px;font-size:13px;line-height:1.5;
+    display:flex;gap:10px;align-items:flex-start}
+  #warn b{color:var(--accent)}
+  #warn code{font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--term-bg);border:1px solid var(--border);
+    border-radius:5px;padding:1px 6px;color:var(--term-fg)}
+  #warn .x{cursor:pointer;margin-left:auto;border:1px solid var(--border);border-radius:6px;padding:2px 8px;background:transparent;color:var(--muted)}
   .empty{color:var(--muted);text-align:center;margin-top:14vh;font-size:15px}
   .empty b{color:var(--text)}
   .typing{display:inline-flex;gap:5px;padding:4px 2px}
@@ -221,6 +250,7 @@
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 </head>
 <body>
+  <div id="warn" hidden></div>
   <aside id="side">
     <div class="brand">
       <div class="logo">E</div>
@@ -431,8 +461,11 @@ async function runModel(name){
   if(status[name]==="loaded"||status[name]==="gen"){if(activeChat()){activeChat().model=name;saveChats();}return;}
   status[name]="loading";refreshCards();
   const ac=new AbortController();
-  try{await fetch(API+"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ac.signal,
-    body:JSON.stringify({model:name,messages:[{role:"user",content:"hi"}],stream:true,keep_alive:"10m"})});}catch(e){}
+  try{
+    const r=await fetch(API+"/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},signal:ac.signal,
+      body:JSON.stringify({model:name,messages:[{role:"user",content:"hi"}],stream:true,keep_alive:"10m"})});
+    if(!r.ok)throw new Error("status "+r.status);
+  }catch(e){ status[name]="idle";refreshCards();toast("Cannot reach Ollama ("+API+"). Run start-ollama.bat first."); return; }
   finally{setTimeout(()=>ac.abort(),600);}
   status[name]="loaded";refreshCards();
   if(activeChat()){activeChat().model=name;saveChats();}
@@ -462,14 +495,64 @@ function clearEmpty(){if(msgsEl.querySelector(".empty")){msgsEl.innerHTML='<div 
 function renderBody(el, text){
   const blocks=[];
   let s=text.replace(/```(\w*)\n([\s\S]*?)```/g,function(m,lang,code){
-    blocks.push('<pre class="codebox"><code>'+code.replace(/\n$/,'')+'</code></pre>');
+    blocks.push({lang:lang||'',code:code.replace(/\n$/,'')});
     return ' B'+(blocks.length-1)+' ';
   });
   s=s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   s=s.replace(/`([^`\n]+)`/g,function(m,c){return '<code class="inline">'+c+'</code>';});
   s=s.replace(/\n/g,'<br>');
-  s=s.replace(/ B(\d+) /g,function(m,i){return blocks[+i];});
+  s=s.replace(/ B(\d+) /g,function(m,i){return '<div class="codewrap" data-i="'+i+'"></div>';});
   el.innerHTML=s;
+  el.querySelectorAll('.codewrap').forEach(function(box){
+    const b=blocks[+box.getAttribute('data-i')];
+    const head=document.createElement('div');head.className='codehead';
+    const lang=document.createElement('span');lang.className='codelang';lang.textContent=(b.lang||'code').toUpperCase();
+    const acts=document.createElement('div');acts.className='codeacts';
+    const cp=document.createElement('button');cp.className='cbtn copy';cp.textContent='\u29C9 Copy';
+    const sv=document.createElement('button');sv.className='cbtn save';sv.textContent='\u{1F4BE} Save';
+    const rn=document.createElement('button');rn.className='cbtn run';rn.textContent='\u25B6 Run';
+    acts.appendChild(cp);acts.appendChild(sv);acts.appendChild(rn);
+    head.appendChild(lang);head.appendChild(acts);
+    const pre=document.createElement('pre');pre.className='codebox';
+    const code=document.createElement('code');code.textContent=b.code;pre.appendChild(code);
+    const out=document.createElement('div');out.className='codeout';
+    box.appendChild(head);box.appendChild(pre);box.appendChild(out);
+    cp.onclick=function(){navigator.clipboard.writeText(b.code).then(function(){toast('Copied to clipboard');}).catch(function(){toast('Copy failed');});};
+    sv.onclick=function(){saveCode(b.lang,b.code);};
+    rn.onclick=function(){runCode(b.lang,b.code,out,rn);};
+  });
+}
+function saveCode(lang,code){
+  const def=(lang==='python'?'script.py':lang==='js'?'script.js':lang==='bash'||lang==='sh'?'script.sh':lang==='html'?'index.html':'file.txt');
+  const name=prompt('Save code as (local file):',def); if(!name)return;
+  fetch(TERM+'/writefile',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:'webui/saved/'+name,content:code})})
+    .then(r=>r.json()).then(j=>{ j.ok?toast('Saved \u2192 '+j.path):toast('Save failed: '+j.error); })
+    .catch(e=>toast('Save error: '+e));
+}
+async function runCode(lang,code,out,btn){
+  const ext=(lang==='python'?'py':lang==='js'?'js':lang==='bash'||lang==='sh'?'sh':'txt');
+  const rel='webui/saved/run_'+Date.now().toString(36)+'.'+ext;
+  const sj=await (await fetch(TERM+'/writefile',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:rel,content:code})})).json();
+  if(!sj.ok){out.textContent='Save failed: '+sj.error;return;}
+  const cmd=(lang==='python'?'python ':lang==='js'?'node ':lang==='bash'||lang==='sh'?'bash ':'')+rel;
+  out.textContent='Running '+rel+'\u2026\n';btn.disabled=true;
+  try{
+    const res=await fetch(TERM+'/exec?cmd='+encodeURIComponent(cmd));
+    const reader=res.body.getReader(),dec=new TextDecoder();let buf='';
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});
+      let i;while((i=buf.indexOf('\n\n'))>=0){const ch=buf.slice(0,i);buf=buf.slice(i+2);
+        const m=ch.match(/^data: (.*)$/s);if(m){try{out.textContent+=JSON.parse(m[1])+'\n';}catch(e){out.textContent+=ch+'\n';}}}}
+    if(buf){const m=buf.match(/^data: (.*)$/s);out.textContent+=(m?JSON.parse(m[1]):buf)+'\n';}
+  }catch(e){out.textContent+='error: '+e+'\n';}
+  btn.disabled=false;
+}
+function toast(msg){
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t);}
+  t.textContent=msg;t.classList.add('show');clearTimeout(t._h);
+  t._h=setTimeout(()=>t.classList.remove('show'),2600);
 }
 function addUser(text){
   clearEmpty();const w=msgsEl.querySelector(".wrap");
@@ -575,7 +658,7 @@ input.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventD
 input.addEventListener("input",()=>{input.style.height="auto";input.style.height=Math.min(input.scrollHeight,180)+"px";});
 input.addEventListener("paste",e=>{
   const t=(e.clipboardData||window.clipboardData).getData("text");
-  if(t&&t.indexOf("\n")>=0&&!/^\s*```/.test(t)){
+  if(t&&t.indexOf("\n")>=0&&!/```/.test(t)){
     e.preventDefault();
     const ss=input.selectionStart,en=input.selectionEnd;
     const wrapped="```\n"+t.replace(/\n+$/,"")+"\n```";
@@ -792,6 +875,18 @@ async function loadServices(){
 }
 
 loadChats();loadModels();loadRunning();loadServices();setInterval(loadModels,20000);setInterval(loadRunning,10000);setInterval(loadServices,5000);
+
+// Warn if the page was opened as a local file instead of through the http server.
+(function(){
+  const warn=document.getElementById("warn");
+  if(location.protocol==="file:"){
+    warn.hidden=false;
+    warn.innerHTML='<span>\u26A0\uFE0F You opened this file directly, so the backend (Ollama, terminal, chat) is not running &mdash; buttons like <b>Run</b> will do nothing. '+
+      'Close this and run <code>start-ollama.bat</code> (it opens the app at <code>http://localhost:8000</code>).</span>'+
+      '<button class="x" onclick="this.parentNode.hidden=true">Dismiss</button>';
+  }
+})();
+
 TermManager.addTab("powershell", workingDir);
 </script>
 </body>

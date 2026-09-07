@@ -133,6 +133,13 @@ def service_all(action):
 class Handler(http.server.BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
 
     def do_GET(self):
         if self.path.startswith("/exec"):
@@ -280,7 +287,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 path = obj.get("path", "")
                 content = obj.get("content", "")
                 # restrict to WORKDIR tree to avoid arbitrary writes
-                abspath = os.path.normcase(os.path.abspath(os.path.normpath(path)))
+                if os.path.isabs(path):
+                    abspath = os.path.abspath(os.path.normpath(path))
+                else:
+                    abspath = os.path.abspath(os.path.join(WORKDIR, path))
                 root = os.path.normcase(WORKDIR)
                 if not (abspath == root or abspath.startswith(root + os.sep)):
                     self.send_response(403); self.end_headers(); return
