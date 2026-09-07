@@ -33,6 +33,12 @@ f:\tmp\Model\
 2. Wait ~3 seconds for Ollama to come up.
 3. In the Web UI: pick a model in the left sidebar → click **▶ Run** → start chatting.
 
+> **Do NOT open `webui/index.html` by double-clicking it.** That loads the page as a
+> `file://` URL with no backend running, so the **▶ Run** model button, terminal, and the
+> code **Save/Run** buttons will do nothing. Always launch via `start-ollama.bat` (it serves
+> the page at `http://localhost:8000`). If you do open it directly, the app shows a banner
+> explaining this.
+
 ---
 
 ## 3. The 4 background processes
