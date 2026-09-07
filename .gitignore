@@ -1,0 +1,12 @@
+# Ollama model weights — DO NOT COMMIT (downloaded via `ollama pull`)
+blobs/
+manifests/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS / editor junk
+Thumbs.db
+.DS_Store
+*.swp
