@@ -1,3 +1,11 @@
 {
-  "chats": []
+  "chats": [
+    {
+      "id": "mtqy5xknu73m",
+      "title": "New chat",
+      "model": null,
+      "messages": []
+    }
+  ],
+  "activeId": "mtqy5xknu73m"
 }

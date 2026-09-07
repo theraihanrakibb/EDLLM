@@ -189,5 +189,10 @@ Both models run fully in VRAM with context headroom.
 - Double-click **`stop-ollama.bat`** (kills the Ollama + Web UI + Terminal API + WebSocket
   ports), **or** just close the launcher window.
 
+Both `start-ollama.bat` (on launch, to clear any previous instance) and `stop-ollama.bat`
+free the ports by matching the **local-address** column of `netstat` output and killing the
+owning process — so a stale instance can never keep a port occupied and block a restart.
+All per-service output is written to `f:\tmp\Model\logs\` if you need to debug a failed start.
+
 To free VRAM without stopping the stack: `ollama stop <model>` (or the **■ Stop** button
 next to each model in the sidebar).
